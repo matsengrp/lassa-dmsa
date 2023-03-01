@@ -1,6 +1,24 @@
 {
   "title": "Real-time tracking of Lassa virus evolution",
   "color_options": {
+    "prob_escape_89F_c_5.0": {
+      "menuItem": "89F_escape_5",
+      "legendTitle": "89F_escape_5",
+      "type": "continuous",
+      "key": "89F_escape_5"
+    },
+    "prob_escape_89F_c_20.0": {
+      "menuItem": "89F_escape_20",
+      "legendTitle": "89F_escape_20",
+      "type": "continuous",
+      "key": "89F_escape_20"
+    },
+    "prob_escape_89F_c_80.0": {
+      "menuItem": "89F_escape_80",
+      "legendTitle": "89F_escape_80",
+      "type": "continuous",
+      "key": "89F_escape_80"
+    },
     "gt": {
       "menuItem": "genotype",
       "legendTitle": "Genotype",

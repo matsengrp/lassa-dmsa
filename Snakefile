@@ -1,4 +1,4 @@
-SEGMENTS = ["l", "s"]
+SEGMENTS = ["s"]
 
 rule all:
     input:
@@ -156,14 +156,47 @@ rule translate:
         node_data = rules.ancestral.output.node_data,
         reference = files.reference
     output:
-        node_data = "results/aa_muts_{segment}.json"
+        node_data = "results/aa_muts_{segment}.json",
+        alignments = expand("results/translations/{{segment}}_{gene}.fasta", gene=["NP", "GPC"])
+        
     shell:
         """
         augur translate \
             --tree {input.tree} \
+            --genes NP GPC \
             --ancestral-sequences {input.node_data} \
             --reference-sequence {input.reference} \
-            --output-node-data {output.node_data}
+            --output-node-data {output.node_data} \
+            --alignment-output results/translations/{wildcards.segment}_%GENE.fasta
+        """
+
+rule polyclonal_escape_prediction:
+    input:
+        alignments = "results/translations/s_GPC.fasta"
+    output:
+        node_data = "results/polclonal_escape_prediction.json"
+    log:
+        "logs/polclonal_escape_prediction.txt"
+    params:
+        dms_wt_seq = "Josiah",
+        mut_escape_df = "my_profiles/polyclonal-data/89F/89F_avg.csv",
+        activity_wt_df = "my_profiles/polyclonal-data/89F/89F_epitope.csv",
+        concentrations = "5.0,20.0,80.0",
+    conda:
+        "my_profiles/dmsa-pred/dmsa_env.yaml"
+    resources:
+        mem_mb=2000
+    shell:
+        """
+        python my_profiles/dmsa-pred/dmsa_pred.py polyclonal-escape \
+            --activity-wt-df {params.activity_wt_df} \
+            --concentrations {params.concentrations} \
+            --escape-column escape_mean \
+            --alignment {input.alignments} \
+            --mut-effects-df {params.mut_escape_df} \
+            --dms-wt-seq-id {params.dms_wt_seq:q} \
+            --experiment-label 89F \
+            --output {output.node_data} 2>&1 | tee {log}
         """
 
 rule traits:
@@ -192,6 +225,7 @@ rule export:
         metadata = rules.parse.output.metadata,
         branch_lengths = rules.refine.output.node_data,
         traits = rules.traits.output.node_data,
+        escape_predictions = rules.polyclonal_escape_prediction.output.node_data,
         nt_muts = rules.ancestral.output.node_data,
         aa_muts = rules.translate.output.node_data,
         colors = files.colors,
@@ -204,7 +238,7 @@ rule export:
         augur export v1 \
             --tree {input.tree} \
             --metadata {input.metadata} \
-            --node-data {input.branch_lengths} {input.traits} {input.nt_muts} {input.aa_muts} \
+            --node-data {input.branch_lengths} {input.traits} {input.nt_muts} {input.aa_muts} {input.escape_predictions} \
             --colors {input.colors} \
             --auspice-config {input.auspice_config} \
             --output-tree {output.auspice_tree} \
