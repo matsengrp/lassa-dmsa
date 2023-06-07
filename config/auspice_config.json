@@ -1,54 +1,49 @@
 {
   "title": "Real-time tracking of Lassa virus evolution",
-  "color_options": {
-    "prob_escape_89F_c_5.0": {
-      "menuItem": "89F_escape_5",
-      "legendTitle": "89F_escape_5",
-      "type": "continuous",
-      "key": "89F_escape_5"
+  "build_url": "https://github.com/nextstrain/zika",
+  "colorings": [
+    {
+      "key": "host",
+      "title": "host",
+      "type": "categorical"
     },
-    "prob_escape_89F_c_20.0": {
-      "menuItem": "89F_escape_20",
-      "legendTitle": "89F_escape_20",
-      "type": "continuous",
-      "key": "89F_escape_20"
+    {
+      "key": "strain_original",
+      "title": "strain name",
+      "type": "categorical"
     },
-    "prob_escape_89F_c_80.0": {
-      "menuItem": "89F_escape_80",
-      "legendTitle": "89F_escape_80",
-      "type": "continuous",
-      "key": "89F_escape_80"
+    {
+      "key": "gt",
+      "title": "genotype",
+      "type": "categorical"
     },
-    "gt": {
-      "menuItem": "genotype",
-      "legendTitle": "Genotype",
-      "type": "discrete",
-      "key": "genotype"
+    {
+      "key": "num_date",
+      "title": "date",
+      "type": "continuous"
     },
-    "num_date": {
-      "menuItem": "date",
-      "legendTitle": "Sampling date",
-      "type": "continuous",
-      "key": "num_date"
+    {
+      "key": "location",
+      "title": "location",
+      "type": "categorical"
     },
-    "authors": {
-      "key":"authors",
-      "legendTitle":"Authors",
-      "menuItem":"authors",
-      "type":"discrete"
-    },
-    "country": {
+    {
+      "key": "country",
+      "title": "country",
+      "type": "categorical"
     }
-  },
-  "geo": [
-    "country"
   ],
-  "maintainer": [
-    "ACEGID Redeemer's University",
-    "http://acegid.org/"
-  ],
-  "filters": [
+  "geo_resolutions": [
     "country",
-    "authors"
+    "region"
+  ],
+  "display_defaults": {
+    "map_triplicate": true
+  },
+  "filters": [
+    "host",
+    "country",
+    "region",
+    "author"
   ]
 }

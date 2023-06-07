@@ -4,19 +4,23 @@
 inputs:
   s: 
     sequences: "data/S_segment_LASV_fasta_041423.fasta"
-    metadata: "data/S_segment_LASV_metadata_041423.tsv"
-  l:
-    sequences: "L_segment_LASV_fasta_041423.fasta"
-    metadata: "L_segment_LASV_metadata_041423.tsv"
+    metadata: "data/metadata_patch.tsv"
+    reference_name: "Josiah_NC_004296_reverse_complement_2018-08-13"
+    reference_annotation: "data/LASV_S_reference_NC_004296_patch.gff"
+  #l:
+  #  sequences: "L_segment_LASV_fasta_041423.fasta"
+  #  metadata: "L_segment_LASV_metadata_041423.tsv"
+
+
 
 
 polyclonal_serum_models:
   89F:
-    dms_wt_seq_id: "Josiah_NC_004296"
+    dms_wt_seq_id: "Josiah_NC_004296_reverse_complement_2018-08-13"
     mut_effects_df: "../data/lassa/polyclonal-data/89F/89F_avg.csv"
     activity_wt_df: "../data/lassa/polyclonal-data/89F/89F_epitope.csv"
     mut_effect_col: "escape_median"
     mutation_col: "mutation"
     icxx: 0.9
-    concentrations: "5.0,20.0,80.0"
+    # concentrations: "5.0,20.0,80.0"
 

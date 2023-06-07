@@ -4,8 +4,8 @@ rule all:
     input:
         #auspice_tree = expand("auspice/lassa_{segment}_tree.json", segment=SEGMENTS),
         #auspice_meta = expand("auspice/lassa_{segment}_meta.json", segment=SEGMENTS)
-        auspice = expand("auspice/lassa_{segment}.json", segment=SEGMENTS),
-        auspice_root_sequence = expand("auspice/lassa_{segment}_root-sequence.json", segment=SEGMENTS)
+        auspice = expand("auspice/lassa-{segment}.json", segment=SEGMENTS),
+        auspice_root_sequence = expand("auspice/lassa-{segment}_root-sequence.json", segment=SEGMENTS)
 
 rule files:
     params:
@@ -67,19 +67,21 @@ rule filter:
 rule align:
     message:
         """
-        Aligning sequences to {input.reference}
+        Aligning sequences to {params.reference_name}
           - filling gaps with N
         """
     input:
         sequences = rules.filter.output.sequences,
-        reference = files.reference
+        # reference_name = lambda w: config["inputs"][f"{w.segment}"]["reference_name"]
     output:
         alignment = "results/aligned_{segment}.fasta"
+    params:
+        reference_name = lambda w: config["inputs"][f"{w.segment}"]["reference_name"]
     shell:
         """
         augur align \
             --sequences {input.sequences} \
-            --reference-sequence {input.reference} \
+            --reference-name {params.reference_name} \
             --output {output.alignment} \
             --fill-gaps
         """
@@ -160,7 +162,8 @@ rule translate:
     input:
         tree = rules.refine.output.tree,
         node_data = rules.ancestral.output.node_data,
-        reference = files.reference
+        # reference_annotation = files.reference
+        reference_annotation = lambda w: config["inputs"][f"{w.segment}"]["reference_annotation"]
     output:
         node_data = "results/aa_muts_{segment}.json",
         alignments = expand("results/translations/{{segment}}_{gene}.fasta", gene=["NP", "GPC"])
@@ -171,7 +174,7 @@ rule translate:
             --tree {input.tree} \
             --genes NP GPC \
             --ancestral-sequences {input.node_data} \
-            --reference-sequence {input.reference} \
+            --reference-sequence {input.reference_annotation} \
             --output-node-data {output.node_data} \
             --alignment-output results/translations/{wildcards.segment}_%GENE.fasta
         """
@@ -180,10 +183,10 @@ rule polyclonal_escape_prediction:
     input:
         alignment = "results/translations/s_GPC.fasta"
     output:
-        node_data = "results/{serum}_polclonal_escape_prediction.json",
-        pred_data = "results/{serum}_polclonal_escape_prediction.csv"
+        node_data = "results/{serum}_polyclonal_escape_prediction.json",
+        pred_data = "results/{serum}_polyclonal_escape_prediction.csv"
     log:
-        "logs/{serum}_polclonal_escape_prediction.txt"
+        "logs/{serum}_polyclonal_escape_prediction.txt"
     params:
         dms_wt_seq_id = lambda w: config["polyclonal_serum_models"][f"{w.serum}"]["dms_wt_seq_id"],
         mut_effects_df = lambda w: config["polyclonal_serum_models"][f"{w.serum}"]["mut_effects_df"],
@@ -242,6 +245,22 @@ def _get_polyclonal_node_data(wildcards):
     return inputs
 
 
+rule auspice_config:
+    message: "Getting auspice config for modification"
+    input:
+        default_auspice_config = files.auspice_config
+    output:
+        "results/dmsa_modified_auspice_config.json"
+    params:
+        path_config = workflow.overwrite_configfiles[0]
+    shell:
+        """
+        python my_profiles/dmsa-pred/modify_auspice_config.py \
+            --auspice-config-path {input.default_auspice_config} \
+            --snake-config-path {params.path_config} \
+            --output-config-path {output}
+        """
+
 rule export:
     message: "Exporting data files for for auspice"
     input:
@@ -254,10 +273,11 @@ rule export:
         nt_muts = rules.ancestral.output.node_data,
         aa_muts = rules.translate.output.node_data,
         colors = files.colors,
-        auspice_config = files.auspice_config
+        # auspice_config = files.auspice_config
+        auspice_config = rules.auspice_config.output
     output:
-        auspice_json = "auspice/lassa_{segment}.json",
-        root_sequence_json = "auspice/lassa_{segment}_root-sequence.json" 
+        auspice_json = "auspice/lassa-{segment}.json",
+        root_sequence_json = "auspice/lassa-{segment}_root-sequence.json" 
         #auspice_tree = "auspice/lassa_{segment}_tree.json",
         #auspice_meta = "auspice/lassa_{segment}_meta.json"
     log:
