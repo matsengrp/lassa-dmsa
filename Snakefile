@@ -1,9 +1,9 @@
+
+
 SEGMENTS = ["s"]
 
 rule all:
     input:
-        #auspice_tree = expand("auspice/lassa_{segment}_tree.json", segment=SEGMENTS),
-        #auspice_meta = expand("auspice/lassa_{segment}_meta.json", segment=SEGMENTS)
         auspice = expand("auspice/lassa-{segment}.json", segment=SEGMENTS),
         auspice_root_sequence = expand("auspice/lassa-{segment}_root-sequence.json", segment=SEGMENTS)
 
@@ -12,28 +12,10 @@ rule files:
         dropped_strains = "config/dropped_strains.txt",
         reference = "config/lassa_{segment}.gb",
         colors = "config/colors.tsv",
-        auspice_config = "config/auspice_config.json"
+        auspice_config = "config/auspice_config.json",
+        allow_missing_sites = "allowed_missing_sites.txt"
 
 files = rules.files.params
-
-#rule parse:
-#    message: "Parsing fasta into sequences and metadata"
-#    #input:
-#    #    sequences = files.input_fasta
-#    output:
-#        # sequences = "results/sequences_{segment}.fasta",
-#        sequences = lambda w: config["inputs"][f"{w.segment}"]["sequences"],
-#        metadata = lambda w: config["inputs"][f"{w.segment}"]["metadata"]
-#    #params:
-#    #    fasta_fields = "strain accession segment date region country host authors title journal puburl"
-#    #shell:
-#    #    """
-#    #    augur parse \
-#    #        --sequences {input.sequences} \
-#    #        --output-sequences {output.sequences} \
-#    #        --output-metadata {output.metadata} \
-#    #        --fields {params.fasta_fields}
-#    #    """
 
 rule filter:
     message:
@@ -44,14 +26,13 @@ rule filter:
     input:
         sequences = lambda w: config["inputs"][f"{w.segment}"]["sequences"],
         metadata = lambda w: config["inputs"][f"{w.segment}"]["metadata"],
-        #sequences = rules.parse.output.sequences,
-        #metadata = rules.parse.output.metadata,
         exclude = files.dropped_strains
     output:
         sequences = "results/filtered_{segment}.fasta"
-    #params:
-    #    group_by = "country year",
-    #    sequences_per_group = 2,
+    conda: 
+        "my_profiles/dmsa-pred/dmsa_env.yaml"
+    log:
+        "logs/filter_{segment}.txt"
     shell:
         """
         augur filter \
@@ -60,9 +41,6 @@ rule filter:
             --exclude {input.exclude} \
             --output {output.sequences}
         """
-# - {params.sequences_per_group} sequence(s) per {params.group_by!s}
-#--group-by {params.group_by} \
-#--sequences-per-group {params.sequences_per_group}
 
 rule align:
     message:
@@ -72,11 +50,12 @@ rule align:
         """
     input:
         sequences = rules.filter.output.sequences,
-        # reference_name = lambda w: config["inputs"][f"{w.segment}"]["reference_name"]
     output:
         alignment = "results/aligned_{segment}.fasta"
     params:
         reference_name = lambda w: config["inputs"][f"{w.segment}"]["reference_name"]
+    conda: 
+        "my_profiles/dmsa-pred/dmsa_env.yaml"
     shell:
         """
         augur align \
@@ -94,6 +73,8 @@ rule tree:
         tree = "results/tree_raw_{segment}.nwk"
     params:
         method = "iqtree"
+    conda: 
+        "my_profiles/dmsa-pred/dmsa_env.yaml"
     shell:
         """
         augur tree \
@@ -114,8 +95,6 @@ rule refine:
     input:
         tree = rules.tree.output.tree,
         alignment = rules.align.output,
-        # metadata = rules.parse.output.metadata
-        # metadata = rules.filter.output.metadata
         metadata = lambda w: config["inputs"][f"{w.segment}"]["metadata"]
     output:
         tree = "results/tree_{segment}.nwk",
@@ -124,6 +103,8 @@ rule refine:
         coalescent = "opt",
         date_inference = "marginal",
         clock_rate = 0.0006
+    conda: 
+        "my_profiles/dmsa-pred/dmsa_env.yaml"
     shell:
         """
         augur refine \
@@ -148,6 +129,8 @@ rule ancestral:
         node_data = "results/nt_muts_{segment}.json"
     params:
         inference = "joint"
+    conda: 
+        "my_profiles/dmsa-pred/dmsa_env.yaml"
     shell:
         """
         augur ancestral \
@@ -162,11 +145,14 @@ rule translate:
     input:
         tree = rules.refine.output.tree,
         node_data = rules.ancestral.output.node_data,
-        # reference_annotation = files.reference
         reference_annotation = lambda w: config["inputs"][f"{w.segment}"]["reference_annotation"]
     output:
         node_data = "results/aa_muts_{segment}.json",
         alignments = expand("results/translations/{{segment}}_{gene}.fasta", gene=["NP", "GPC"])
+    conda: 
+        "my_profiles/dmsa-pred/dmsa_env.yaml"
+    log:
+        "logs/translate_{segment}.txt"
         
     shell:
         """
@@ -179,38 +165,39 @@ rule translate:
             --alignment-output results/translations/{wildcards.segment}_%GENE.fasta
         """
 
-rule polyclonal_escape_prediction:
+# Note, this is hardcoded to only make predictions for the GC gene in the s segment build
+# additional 'segment' and 'gene' wildcards would need to be defined to make this more general
+rule variant_escape_prediction:
     input:
         alignment = "results/translations/s_GPC.fasta"
     output:
-        node_data = "results/{serum}_polyclonal_escape_prediction.json",
-        pred_data = "results/{serum}_polyclonal_escape_prediction.csv"
+        node_data = "results/dmsa-phenotype/{collection}/{experiment}_escape_prediction.json",
+        pred_data = "results/dmsa-phenotype/{collection}/{experiment}_escape_prediction.csv"
     log:
-        "logs/{serum}_polyclonal_escape_prediction.txt"
+        "logs/{collection}/{experiment}_escape_prediction.txt"
     params:
-        dms_wt_seq_id = lambda w: config["polyclonal_serum_models"][f"{w.serum}"]["dms_wt_seq_id"],
-        mut_effects_df = lambda w: config["polyclonal_serum_models"][f"{w.serum}"]["mut_effects_df"],
-        mut_effect_col = lambda w: config["polyclonal_serum_models"][f"{w.serum}"]["mut_effect_col"],
-        mutation_col = lambda w: config["polyclonal_serum_models"][f"{w.serum}"]["mutation_col"],
-        activity_wt_df = lambda w: config["polyclonal_serum_models"][f"{w.serum}"]["activity_wt_df"],
-        concentrations = lambda w: config["polyclonal_serum_models"][f"{w.serum}"]["concentrations"] if "concentrations" in config["polyclonal_serum_models"][f"{w.serum}"] else "0.0",
-        icxx = lambda w: config["polyclonal_serum_models"][f"{w.serum}"]["icxx"] if "icxx" in config["polyclonal_serum_models"][f"{w.serum}"] else 0.0
+        basedir = lambda w: config["dmsa_phenotype_collections"].get(w.collection)['mut_effects_dir'],
+        dms_wt_seq_id = lambda w: config["inputs"][f"s"]["reference_name"],
+        mut_effect_col = lambda w: config["dmsa_phenotype_collections"].get(w.collection)['mut_effect_col'],
+        mutation_col = lambda w: config["dmsa_phenotype_collections"].get(w.collection)['mutation_col'],
+        mut_effects_df = lambda w: os.path.join(
+            config["dmsa_phenotype_collections"].get(w.collection)['mut_effects_dir'], 
+            w.experiment
+        ),
     conda:
         "my_profiles/dmsa-pred/dmsa_env.yaml"
-    resources:
-        mem_mb=2000
     shell:
         """
-        python my_profiles/dmsa-pred/dmsa_pred.py polyclonal-escape \
+        python my_profiles/dmsa-pred/dmsa_pred.py phenotype-prediction \
+            --model-type additive \
             --alignment {input.alignment} \
             --dms-wt-seq-id {params.dms_wt_seq_id} \
+            --mask-seqs-with-disallowed-aa-subs False \
+            --min-pred-pheno 0.0 \
             --mut-effects-df {params.mut_effects_df} \
             --mut-effect-col {params.mut_effect_col} \
             --mutation-col {params.mutation_col} \
-            --activity-wt-df {params.activity_wt_df} \
-            --concentrations {params.concentrations} \
-            --icxx {params.icxx} \
-            --experiment-label {wildcards.serum} \
+            --experiment-label {wildcards.experiment} \
             --output-json {output.node_data} \
             --output-df {output.pred_data} 2>&1 | tee {log}
         """
@@ -225,6 +212,8 @@ rule traits:
         node_data = "results/traits_{segment}.json",
     params:
         columns = "country"
+    conda: 
+        "my_profiles/dmsa-pred/dmsa_env.yaml"
     shell:
         """
         augur traits \
@@ -235,13 +224,25 @@ rule traits:
             --confidence
         """
 
-def _get_polyclonal_node_data(wildcards):
+def _get_variant_escape_node_data(wildcards):
     inputs=[]
-    if "polyclonal_serum_models" in config:
-        inputs += list(expand(
-            rules.polyclonal_escape_prediction.output.node_data, 
-            serum=list(config["polyclonal_serum_models"])
-        ))
+    wildcards_dict = dict(wildcards)
+
+    import glob
+    for collection_name, collection_dict in config['dmsa_phenotype_collections'].items():
+
+        # run the predictions using every csv in the glob
+        requested_files = expand(
+            rules.variant_escape_prediction.output.node_data,
+            collection=collection_name,
+            experiment=[
+                os.path.basename(fp) 
+                for fp in glob.glob(collection_dict['mut_effects_dir']+"/*.csv")
+            ],
+            **wildcards_dict
+        )
+        inputs.extend(requested_files)
+
     return inputs
 
 
@@ -253,6 +254,8 @@ rule auspice_config:
         "results/dmsa_modified_auspice_config.json"
     params:
         path_config = workflow.overwrite_configfiles[0]
+    conda:
+        "my_profiles/dmsa-pred/dmsa_env.yaml"
     shell:
         """
         python my_profiles/dmsa-pred/modify_auspice_config.py \
@@ -265,23 +268,21 @@ rule export:
     message: "Exporting data files for for auspice"
     input:
         tree = rules.refine.output.tree,
-        # metadata = rules.parse.output.metadata,
         metadata = lambda w: config["inputs"][f"{w.segment}"]["metadata"],
         branch_lengths = rules.refine.output.node_data,
         traits = rules.traits.output.node_data,
-        escape_predictions = _get_polyclonal_node_data,
+        escape_predictions = _get_variant_escape_node_data,
         nt_muts = rules.ancestral.output.node_data,
         aa_muts = rules.translate.output.node_data,
         colors = files.colors,
-        # auspice_config = files.auspice_config
-        auspice_config = rules.auspice_config.output
+        auspice_config = files.auspice_config
     output:
         auspice_json = "auspice/lassa-{segment}.json",
         root_sequence_json = "auspice/lassa-{segment}_root-sequence.json" 
-        #auspice_tree = "auspice/lassa_{segment}_tree.json",
-        #auspice_meta = "auspice/lassa_{segment}_meta.json"
     log:
         "logs/export_{segment}.txt"
+    conda: 
+        "my_profiles/dmsa-pred/dmsa_env.yaml"
     shell:
         """
         augur export v2 \
@@ -293,5 +294,3 @@ rule export:
             --auspice-config {input.auspice_config} \
             --output {output.auspice_json} 2>&1 | tee {log}
         """
-#--output-tree {output.auspice_tree} \
-#--output-meta {output.auspice_meta}
