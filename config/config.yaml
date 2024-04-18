@@ -1,0 +1,13 @@
+
+# DMSA phenotype prediction
+# dictionary of phenotype collections
+# each collection has a name and a set of parameters
+# For a number of individual experiemnts.
+dmsa_phenotype_collections:
+  all-sera:
+    # directory containing escape csv's
+    mut_effects_dir: "my_profiles/LASV_Josiah_GP_DMS/results/filtered_antibody_escape_CSVs"
+    # name of the column containing the effect score
+    mut_effect_col: "escape_median"
+    # name of the column containing the mutation
+    mutation_col: "mutation"

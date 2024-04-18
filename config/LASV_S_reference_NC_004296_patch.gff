@@ -1,6 +1,0 @@
-# Gene map (genome annotation) of lassa in GFF format.
-# For gene map purpses we only need some of the columns. We substitute unused values with "." as per GFF spec.
-# See GFF format reference at https://www.ensembl.org/info/website/upload/gff.html
-# seqname   source  feature start   end     score   strand  frame   attribute
-Josiah_NC_004296_reverse_complement_2018-08-13	.	gene	56	1531	.	+	0	gene_name=GPC
-Josiah_NC_004296_reverse_complement_2018-08-13	.	gene	1593	3302	.	-	0	gene_name=NP
