@@ -8,6 +8,6 @@ dmsa_phenotype_collections:
     # directory containing escape csv's
     mut_effects_dir: "my_profiles/LASV_Josiah_GP_DMS/results/filtered_antibody_escape_CSVs"
     # name of the column containing the effect score
-    mut_effect_col: "escape_median"
+    mut_effect_col: "escape_median_floor_zero"
     # name of the column containing the mutation
     mutation_col: "mutation"
