@@ -1,6 +1,6 @@
 {
   "title": "Real-time tracking of Lassa virus evolution",
-  "build_url": "https://github.com/nextstrain/zika",
+  "build_url": "https://github.com/matsengrp/lassa-dmsa",
   "colorings": [
     {
       "key": "host",
@@ -38,7 +38,8 @@
     "region"
   ],
   "display_defaults": {
-    "map_triplicate": true
+    "map_triplicate": true,
+    "distance_measure": "div"
   },
   "filters": [
     "host",

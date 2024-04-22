@@ -1,6 +1,36 @@
 
+# Initialize parameters
+SEGMENTS = ["S"]
+GENOME_SIZE_THRESHOLDS = [1000, 4000] # LASV S segment ~ 3kb and LASV L segment ~ 7kb
+MAX_FRAC_N = 0 # Maximum fraction of ambiuous bases allowed
+ACCESSIONS_TO_EXCLUDE = [
+    "MK107912", # this sequences is an outlier with many more bases that do not align
+    "MK281631", # this sequences has many 'X' amino acids
+    "MK118006", # this sequences has many 'X' and more bases that do not align
+    "MT193286", # this sequences has many 'X' and more bases that do not align
+    "MT193287", # this sequences has many 'X' and more bases that do not align
+    "K117948 ",# this sequences has many 'X' and more bases that do not align
+    "MK117981", # this sequences has many 'X' and more bases that do not align
+    "MK118036", # this sequences has many 'X' and more bases that do not align
+    "MK118037", # this sequences has many 'X' and more bases that do not align
+    "MH887756", # this sequences has many 'X' and more bases that do not align
+    "MH157039", # this sequences has many 'X' and more bases that do not align
+    "MH053490", # this sequences has many 'X' and more bases that do not align
+    "MK117951", # this sequences has many 'X' and more bases that do not align
+    "MK118005", # this sequences has many 'X' and more bases that do not align
+    "MK118034", # this sequences has many 'X' and more bases that do not align
+    "MK117850", # this sequences has many 'X' and more bases that do not align
+    "MK117954", # this sequences has many 'X' and more bases that do not align
+    "MK117977", # this sequences has many 'X' and more bases that do not align
+    "MK118013", # more of a borderline one b/c of 'X'
+    "MK118015", # this sequences has many 'X' and more bases that do not align
+    "MK118017", # this sequences has many 'X' and more bases that do not align
+    "MK118032", # this sequences has many 'X' and more bases that do not align
+    "MH053523", # this sequences has many 'X' and more bases that do not align
+    "MK118027", # more of a borderline one b/c has N bases instead of stop codon and adds trailing amino acids
+]
+DMS_WT_SEQ_ID = "Josiah_NC_004296_2018-08-13"
 
-SEGMENTS = ["s"]
 
 rule all:
     input:
@@ -9,13 +39,38 @@ rule all:
 
 rule files:
     params:
+        accessions = "config/all_LASV_accessions_081023.txt", # List of accessions to download
+        reference = "config/LASV_S_reference_NC_004296_RC.gb", # Josiah reference
         dropped_strains = "config/dropped_strains.txt",
-        reference = "config/lassa_{segment}.gb",
         colors = "config/colors.tsv",
         auspice_config = "config/auspice_config.json",
         allow_missing_sites = "allowed_missing_sites.txt"
 
 files = rules.files.params
+
+rule download_data:
+    message:
+        """
+        Processing the following accessions:
+          - {input.accessions}
+        """
+    input:
+        accessions = files.accessions
+    params:
+        genome_size_threshold_lower = GENOME_SIZE_THRESHOLDS[0],
+        genome_size_threshold_upper = GENOME_SIZE_THRESHOLDS[1],
+        desired_segment = SEGMENTS[0],
+        max_frac_N = MAX_FRAC_N,
+        accesstions_to_exclude = ACCESSIONS_TO_EXCLUDE,
+    output:
+        sequences = "results/unfiltered_{segment}.fasta",
+        metadata = "results/{segment}_metadata.tsv",
+    conda: 
+        "my_profiles/dmsa-pred/dmsa_env.yaml"
+    log:
+        "logs/download_{segment}_data.txt"
+    script:
+        "scripts/download_NCBI_sequences.py"
 
 rule filter:
     message:
@@ -24,8 +79,8 @@ rule filter:
           - excluding strains in {input.exclude}
         """
     input:
-        sequences = lambda w: config["inputs"][f"{w.segment}"]["sequences"],
-        metadata = lambda w: config["inputs"][f"{w.segment}"]["metadata"],
+        sequences = "results/unfiltered_{segment}.fasta",
+        metadata = "results/{segment}_metadata.tsv",
         exclude = files.dropped_strains
     output:
         sequences = "results/filtered_{segment}.fasta"
@@ -45,7 +100,7 @@ rule filter:
 rule align:
     message:
         """
-        Aligning sequences to {params.reference_name}
+        Aligning sequences to {params.reference}
           - filling gaps with N
         """
     input:
@@ -53,15 +108,16 @@ rule align:
     output:
         alignment = "results/aligned_{segment}.fasta"
     params:
-        reference_name = lambda w: config["inputs"][f"{w.segment}"]["reference_name"]
+        reference = files.reference
     conda: 
         "my_profiles/dmsa-pred/dmsa_env.yaml"
     shell:
         """
         augur align \
             --sequences {input.sequences} \
-            --reference-name {params.reference_name} \
+            --reference-sequence {params.reference} \
             --output {output.alignment} \
+            --remove-reference \
             --fill-gaps
         """
 
@@ -95,7 +151,7 @@ rule refine:
     input:
         tree = rules.tree.output.tree,
         alignment = rules.align.output,
-        metadata = lambda w: config["inputs"][f"{w.segment}"]["metadata"]
+        metadata = "results/{segment}_metadata.tsv",
     output:
         tree = "results/tree_{segment}.nwk",
         node_data = "results/branch_lengths_{segment}.json"
@@ -145,10 +201,10 @@ rule translate:
     input:
         tree = rules.refine.output.tree,
         node_data = rules.ancestral.output.node_data,
-        reference_annotation = lambda w: config["inputs"][f"{w.segment}"]["reference_annotation"]
+        reference = files.reference
     output:
         node_data = "results/aa_muts_{segment}.json",
-        alignments = expand("results/translations/{{segment}}_{gene}.fasta", gene=["NP", "GPC"])
+        alignments = expand("results/translations/{{segment}}_{gene}.fasta", gene=["Glycoprotein", "Nucleoprotein"])
     conda: 
         "my_profiles/dmsa-pred/dmsa_env.yaml"
     log:
@@ -158,18 +214,18 @@ rule translate:
         """
         augur translate \
             --tree {input.tree} \
-            --genes NP GPC \
+            --genes Glycoprotein Nucleoprotein \
             --ancestral-sequences {input.node_data} \
-            --reference-sequence {input.reference_annotation} \
+            --reference-sequence {input.reference} \
             --output-node-data {output.node_data} \
             --alignment-output results/translations/{wildcards.segment}_%GENE.fasta
         """
 
-# Note, this is hardcoded to only make predictions for the GC gene in the s segment build
+# Note, this is hardcoded to only make predictions for the GPC gene in the S segment build
 # additional 'segment' and 'gene' wildcards would need to be defined to make this more general
 rule variant_escape_prediction:
     input:
-        alignment = "results/translations/s_GPC.fasta"
+        alignment = "results/translations/S_Glycoprotein.fasta"
     output:
         node_data = "results/dmsa-phenotype/{collection}/{experiment}_escape_prediction.json",
         pred_data = "results/dmsa-phenotype/{collection}/{experiment}_escape_prediction.csv"
@@ -177,7 +233,7 @@ rule variant_escape_prediction:
         "logs/{collection}/{experiment}_escape_prediction.txt"
     params:
         basedir = lambda w: config["dmsa_phenotype_collections"].get(w.collection)['mut_effects_dir'],
-        dms_wt_seq_id = lambda w: config["inputs"][f"s"]["reference_name"],
+        dms_wt_seq_id = DMS_WT_SEQ_ID,
         mut_effect_col = lambda w: config["dmsa_phenotype_collections"].get(w.collection)['mut_effect_col'],
         mutation_col = lambda w: config["dmsa_phenotype_collections"].get(w.collection)['mutation_col'],
         mut_effects_df = lambda w: os.path.join(
@@ -206,8 +262,7 @@ rule traits:
     message: "Inferring ancestral traits for {params.columns!s}"
     input:
         tree = rules.refine.output.tree,
-        # metadata = rules.parse.output.metadata
-        metadata = lambda w: config["inputs"][f"{w.segment}"]["metadata"]
+        metadata = "results/{segment}_metadata.tsv",
     output:
         node_data = "results/traits_{segment}.json",
     params:
@@ -268,7 +323,7 @@ rule export:
     message: "Exporting data files for for auspice"
     input:
         tree = rules.refine.output.tree,
-        metadata = lambda w: config["inputs"][f"{w.segment}"]["metadata"],
+        metadata = "results/{segment}_metadata.tsv",
         branch_lengths = rules.refine.output.node_data,
         traits = rules.traits.output.node_data,
         escape_predictions = _get_variant_escape_node_data,
